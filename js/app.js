@@ -83,6 +83,10 @@ function parseMoney(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function isBlankMoney(value) {
+  return String(value ?? "").replace(/\s/g, "").replace(/[^0-9]/g, "") === "";
+}
+
 function formatMoney(n) {
   return money.format(Math.abs(n));
 }
@@ -192,83 +196,6 @@ function totals() {
 function hasData() {
   const { income, expenses } = totals();
   return income > 0 || expenses > 0;
-}
-
-function resetDraft() {
-  state.income = "";
-  state.extra = "";
-  if (!Array.isArray(state.categories) || state.categories.length === 0) {
-    state.categories = structuredClone(DEFAULT_CATEGORIES);
-  } else {
-    state.categories = state.categories.map((cat) => ({ ...cat, amount: "" }));
-  }
-}
-
-function bookTotals() {
-  const byType = { fijo: 0, variable: 0, ahorro: 0 };
-  const byName = new Map();
-  let income = 0;
-  let extra = 0;
-  let expenses = 0;
-  let balance = 0;
-
-  for (const row of history) {
-    income += Number(row.income) || 0;
-    expenses += Number(row.expenses) || 0;
-    balance += Number(row.balance) || 0;
-    extra += parseMoney(row.snapshot?.extra);
-    for (const cat of row.snapshot?.categories || []) {
-      const value = parseMoney(cat.amount);
-      if (value <= 0) continue;
-      if (byType[cat.type] != null) byType[cat.type] += value;
-      const key = `${(cat.name || "Partida").trim()}|${cat.type}`;
-      const prev = byName.get(key) || {
-        name: cat.name || "Partida",
-        type: cat.type,
-        value: 0,
-      };
-      prev.value += value;
-      byName.set(key, prev);
-    }
-  }
-
-  return {
-    income,
-    extra,
-    principal: Math.max(0, income - extra),
-    expenses,
-    balance,
-    byType,
-    byName: [...byName.values()],
-  };
-}
-
-function draftSource() {
-  const { income, expenses, balance } = totals();
-  const extra = parseMoney(state.extra);
-  const byType = { fijo: 0, variable: 0, ahorro: 0 };
-  const byName = [];
-  for (const cat of state.categories) {
-    const value = parseMoney(cat.amount);
-    if (byType[cat.type] != null) byType[cat.type] += value;
-    if (value > 0) byName.push({ name: cat.name, type: cat.type, value });
-  }
-  return {
-    mode: "draft",
-    income,
-    extra,
-    principal: parseMoney(state.income),
-    expenses,
-    balance,
-    byType,
-    byName,
-  };
-}
-
-function breakdownSource() {
-  if (hasData()) return draftSource();
-  if (history.length) return { mode: "book", ...bookTotals() };
-  return null;
 }
 
 function bindField(field) {
@@ -406,9 +333,15 @@ function bindCategoryEvents() {
     });
 
     node.querySelector(".category__amount input").addEventListener("input", (e) => {
+      if (isBlankMoney(e.target.value)) return;
       cat.amount = e.target.value;
       persist();
       scheduleCompute();
+    });
+    node.querySelector(".category__amount input").addEventListener("blur", (e) => {
+      cat.amount = e.target.value;
+      persist();
+      scheduleCompute(true);
     });
 
     node.querySelectorAll(".type").forEach((btn) => {
@@ -455,8 +388,8 @@ async function addCategory() {
 }
 
 function tweenBalance(next) {
-  const source = breakdownSource();
-  if (!source) {
+  const empty = !hasData();
+  if (empty) {
     balanceAnim?.stop();
     displayedBalance = 0;
     els.balance.textContent = "—";
@@ -482,158 +415,67 @@ function tweenBalance(next) {
   els.figure.classList.toggle("is-deficit", next < 0);
 }
 
-function breakdownRowHtml(row, denom) {
-  const share = denom > 0 ? Math.min(100, (Math.abs(row.value) / denom) * 100) : 0;
-  const tone = row.tone || row.type;
-  const amount =
-    row.signed && row.value < 0
-      ? `−${formatMoney(row.value)}`
-      : formatMoney(row.value);
-  return `
-    <div class="breakdown__row">
-      <div class="breakdown__name">
-        <strong>${escapeAttr(row.name)}</strong>
-        <span>${escapeAttr(row.note || "")}</span>
-      </div>
-      <div class="breakdown__track">
-        <div class="breakdown__fill is-${tone}" style="width:${share.toFixed(1)}%"></div>
-      </div>
-      <div class="breakdown__amt">${share.toFixed(0)}% · ${amount}</div>
-    </div>
-  `;
-}
-
 function renderBreakdown() {
-  const source = breakdownSource();
-  const empty = !source;
+  const { income, expenses, balance } = totals();
+  const empty = !hasData();
   els.empty.hidden = !empty;
   els.breakdown.hidden = empty;
+  els.serial.textContent = empty ? "Ticket · —" : `Ticket · Folio ${String(folio).padStart(3, "0")}`;
 
   if (empty) {
-    els.serial.textContent = "Ticket · —";
     els.caption.textContent = "El libro está en blanco.";
     els.breakdown.innerHTML = "";
     return;
   }
 
-  const denom = source.income > 0 ? source.income : source.expenses;
-  const isBook = source.mode === "book";
-  els.serial.textContent = isBook
-    ? `Libro · ${history.length} folio${history.length === 1 ? "" : "s"}`
-    : `Ticket · Folio ${String(folio + 1).padStart(3, "0")} · en curso`;
-
-  if (isBook) {
-    els.caption.textContent = `Libro acumulado · ${history.length} folio${history.length === 1 ? "" : "s"} · saldo ${formatSigned(source.balance)}.`;
-  } else if (source.balance > 0) {
-    els.caption.textContent = `Superávit de ${formatMoney(source.balance)} · ${pct(source.balance, source.income)} del ingreso queda libre.`;
-  } else if (source.balance < 0) {
-    els.caption.textContent = `Déficit de ${formatMoney(source.balance)} · los egresos superan al ingreso.`;
+  if (balance > 0) {
+    els.caption.textContent = `Superávit de ${formatMoney(balance)} · ${pct(balance, income)} del ingreso queda libre.`;
+  } else if (balance < 0) {
+    els.caption.textContent = `Déficit de ${formatMoney(balance)} · los egresos superan al ingreso.`;
   } else {
     els.caption.textContent = "Las cuentas cierran en cero. Ni sobra ni falta.";
   }
 
-  const general = [
-    {
-      name: "Ingresos",
-      note: "Sueldo + extra",
-      value: source.income,
-      type: "ingreso",
-    },
-    {
-      name: "Fijo",
-      note: "Apartado",
-      value: source.byType.fijo,
-      type: "fijo",
-    },
-    {
-      name: "Variable",
-      note: "Apartado",
-      value: source.byType.variable,
-      type: "variable",
-    },
-    {
-      name: "Ahorro",
-      note: "Apartado",
-      value: source.byType.ahorro,
-      type: "ahorro",
-    },
-  ];
+  const rows = state.categories
+    .map((cat) => ({
+      ...cat,
+      value: parseMoney(cat.amount),
+    }))
+    .filter((cat) => cat.value > 0);
 
-  if (source.balance >= 0) {
-    general.push({
+  if (balance > 0) {
+    rows.push({
+      id: "libre",
       name: "Libre / no asignado",
-      note: "Remanente",
-      value: source.balance,
       type: "libre",
-    });
-  } else {
-    general.push({
-      name: "Déficit",
-      note: "Egresos de más",
-      value: source.balance,
-      type: "deficit",
-      signed: true,
+      value: balance,
     });
   }
 
-  const specific = [];
-  if (source.principal > 0) {
-    specific.push({
-      name: "Sueldo / principal",
-      note: "Ingreso",
-      value: source.principal,
-      type: "ingreso",
-    });
-  }
-  if (source.extra > 0) {
-    specific.push({
-      name: "Ingresos extra",
-      note: "Ingreso",
-      value: source.extra,
-      type: "ingreso",
-    });
-  }
-  for (const row of source.byName) {
-    specific.push({
-      name: row.name,
-      note: TYPE_LABEL[row.type] || row.type,
-      value: row.value,
-      type: row.type,
-    });
-  }
-  if (source.balance > 0) {
-    specific.push({
-      name: "Libre / no asignado",
-      note: "Remanente",
-      value: source.balance,
-      type: "libre",
-    });
-  }
-
-  els.breakdown.innerHTML = `
-    <section class="breakdown__section">
-      <h4 class="breakdown__kicker">General · apartados</h4>
-      <div class="breakdown__rows">
-        ${general.map((row) => breakdownRowHtml(row, denom)).join("")}
-      </div>
-    </section>
-    <section class="breakdown__section">
-      <h4 class="breakdown__kicker">Específico · partidas</h4>
-      <div class="breakdown__rows">
-        ${
-          specific.length
-            ? specific.map((row) => breakdownRowHtml(row, denom)).join("")
-            : `<p class="empty__text">Aún no hay partidas con importe.</p>`
-        }
-      </div>
-    </section>
-  `;
+  const denom = income > 0 ? income : expenses;
+  els.breakdown.innerHTML = rows
+    .map((row) => {
+      const share = denom > 0 ? Math.min(100, (row.value / denom) * 100) : 0;
+      return `
+        <div class="breakdown__row" data-row="${row.id}">
+          <div class="breakdown__name">
+            <strong>${escapeAttr(row.name || "Partida")}</strong>
+            <span>${row.type === "libre" ? "Remanente" : TYPE_LABEL[row.type]}</span>
+          </div>
+          <div class="breakdown__track">
+            <div class="breakdown__fill is-${row.type}" style="width:${share.toFixed(1)}%"></div>
+          </div>
+          <div class="breakdown__amt">${share.toFixed(0)}% · ${formatMoney(row.value)}</div>
+        </div>
+      `;
+    })
+    .join("");
 
   if (!firstPaint) {
     animate(
       els.breakdown.querySelectorAll(".breakdown__fill"),
       { scaleX: [0.15, 1] },
-      { type: "spring", stiffness: 220, damping: 24, delay: stagger(0.03) }
+      { type: "spring", stiffness: 220, damping: 24, delay: stagger(0.04) }
     );
   }
 }
@@ -664,12 +506,10 @@ function renderHistory() {
 }
 
 function compute(immediate = false) {
-  const source = breakdownSource();
-  const income = source?.income || 0;
-  const balance = source?.balance || 0;
-  tweenBalance(source ? balance : 0);
+  const { income, balance } = totals();
+  tweenBalance(balance);
   renderBreakdown();
-  cloud?.setBalance(source ? balance : 0, income);
+  cloud?.setBalance(hasData() ? balance : 0, income);
   persist();
   firstPaint = false;
   if (immediate) return;
@@ -698,14 +538,9 @@ function sealEntry() {
     snapshot: structuredClone(state),
   });
   history = history.slice(0, 16);
-  resetDraft();
-  els.income.value = "";
-  els.extra.value = "";
-  renderCategories();
-  bindCategoryEvents();
   persist(true);
   renderHistory();
-  compute(true);
+  els.serial.textContent = `Ticket · Folio ${String(folio).padStart(3, "0")}`;
   els.folio.textContent = String(folio).padStart(2, "0");
 
   els.seal.classList.add("is-stamped");
@@ -788,14 +623,26 @@ async function init() {
   renderHistory();
 
   els.income.addEventListener("input", () => {
+    if (isBlankMoney(els.income.value)) return;
     state.income = els.income.value;
     persist();
     scheduleCompute();
   });
+  els.income.addEventListener("blur", () => {
+    state.income = els.income.value;
+    persist();
+    scheduleCompute(true);
+  });
   els.extra.addEventListener("input", () => {
+    if (isBlankMoney(els.extra.value)) return;
     state.extra = els.extra.value;
     persist();
     scheduleCompute();
+  });
+  els.extra.addEventListener("blur", () => {
+    state.extra = els.extra.value;
+    persist();
+    scheduleCompute(true);
   });
   els.add.addEventListener("click", addCategory);
   els.seal.addEventListener("click", sealEntry);
@@ -803,7 +650,6 @@ async function init() {
     history = [];
     persist(true);
     renderHistory();
-    compute(true);
   });
   els.historyBody.addEventListener("click", (event) => {
     const id = event.target.closest("button")?.dataset.restore;
@@ -816,15 +662,15 @@ async function init() {
     console.warn("Nube de flujo no disponible:", error);
   }
 
-  const source = breakdownSource();
-  if (source) {
-    displayedBalance = source.balance;
-    els.balance.textContent = `${source.balance < 0 ? "−" : ""}${formatMoney(source.balance)}`;
-    els.figure.classList.toggle("is-surplus", source.balance > 0);
-    els.figure.classList.toggle("is-deficit", source.balance < 0);
+  const { income, balance } = totals();
+  if (hasData()) {
+    displayedBalance = balance;
+    els.balance.textContent = `${balance < 0 ? "−" : ""}${formatMoney(balance)}`;
+    els.figure.classList.toggle("is-surplus", balance > 0);
+    els.figure.classList.toggle("is-deficit", balance < 0);
   }
   renderBreakdown();
-  cloud?.setBalance(source ? source.balance : 0, source?.income || 0);
+  cloud?.setBalance(hasData() ? balance : 0, income);
   firstPaint = false;
   intro();
 }

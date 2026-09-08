@@ -650,26 +650,6 @@ body.is-booting .col-saldo {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 1.15rem;
-}
-
-.breakdown__section + .breakdown__section {
-  padding-top: 0.95rem;
-  border-top: 1px dashed var(--rule);
-}
-
-.breakdown__kicker {
-  margin: 0 0 0.65rem;
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.breakdown__rows {
-  display: grid;
   gap: 0.72rem;
 }
 
@@ -720,16 +700,8 @@ body.is-booting .col-saldo {
   transform-origin: left center;
 }
 
-.breakdown__fill.is-ingreso {
-  background: var(--ink);
-}
-
-.breakdown__fill.is-fijo {
-  background: var(--ink);
-}
-
-.breakdown__fill.is-deficit {
-  background: var(--deficit);
+.breakdown__fill.is-ahorro {
+  background: var(--surplus);
 }
 
 .breakdown__fill.is-variable {
