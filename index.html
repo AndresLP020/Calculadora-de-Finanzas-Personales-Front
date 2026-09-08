@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mayor — Libro de finanzas personales</title>
+    <meta
+      name="description"
+      content="Libro de caja personal: asiente ingresos y gastos, vea el saldo en tiempo real y el desglose de a dónde va el dinero."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "motion": "https://cdn.jsdelivr.net/npm/motion@12.23.24/+esm"
+        }
+      }
+    </script>
+  </head>
+  <body class="is-booting">
+    <noscript>
+      <style>
+        .col-asientos,
+        .col-saldo {
+          opacity: 1 !important;
+        }
+      </style>
+    </noscript>
+    <svg class="noise-src" aria-hidden="true" width="0" height="0">
+      <filter id="paper-grain">
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.72"
+          numOctaves="4"
+          stitchTiles="stitch"
+        />
+        <feColorMatrix
+          type="matrix"
+          values="0 0 0 0 0.11
+                  0 0 0 0 0.10
+                  0 0 0 0 0.08
+                  0 0 0 0.22 0"
+        />
+      </filter>
+    </svg>
+    <svg class="paper-grain" aria-hidden="true" preserveAspectRatio="none">
+      <rect width="100%" height="100%" filter="url(#paper-grain)" />
+    </svg>
+
+    <header class="running-head">
+      <p class="running-head__mark">Cuaderno nº <span id="folio-number">04</span></p>
+      <p class="running-head__title">Finanzas personales</p>
+      <p class="running-head__date" id="running-date"></p>
+    </header>
+
+    <main class="ledger">
+      <section class="col-asientos" aria-labelledby="asientos-title">
+        <div class="margin-rule" aria-hidden="true"></div>
+
+        <header class="col-asientos__head">
+          <p class="kicker">Parte I · Entrada</p>
+          <h1 id="asientos-title">Asientos<br />del mes</h1>
+          <p class="lede">
+            Anote ingresos y partidas a la izquierda. El saldo se tacha solo,
+            sin botón de calcular.
+          </p>
+        </header>
+
+        <form id="ledger-form" class="asientos" autocomplete="off">
+          <fieldset class="block">
+            <legend class="block__legend">Ingresos mensuales</legend>
+
+            <label class="field" data-field>
+              <span class="field__label">Sueldo / ingreso principal</span>
+              <span class="field__body">
+                <span class="field__currency" aria-hidden="true">$</span>
+                <input
+                  class="field__input"
+                  id="income"
+                  name="income"
+                  inputmode="decimal"
+                  placeholder="0.00"
+                  data-kind="money"
+                  aria-describedby="income-hint"
+                />
+              </span>
+              <span class="field__rule" aria-hidden="true"></span>
+            </label>
+            <p class="field__hint" id="income-hint">Cifras con punto o coma decimal.</p>
+
+            <label class="field" data-field>
+              <span class="field__label">Ingresos extra</span>
+              <span class="field__body">
+                <span class="field__currency" aria-hidden="true">$</span>
+                <input
+                  class="field__input"
+                  id="extra-income"
+                  name="extra"
+                  inputmode="decimal"
+                  placeholder="0.00"
+                  data-kind="money"
+                />
+              </span>
+              <span class="field__rule" aria-hidden="true"></span>
+            </label>
+          </fieldset>
+
+          <fieldset class="block">
+            <legend class="block__legend">
+              Gastos
+              <span class="block__legend-note">fijo · variable · ahorro</span>
+            </legend>
+            <div id="categories" class="categories" aria-live="polite"></div>
+            <button type="button" class="btn-add" id="add-category">
+              <span class="btn-add__mark" aria-hidden="true">+</span>
+              Añadir partida
+            </button>
+          </fieldset>
+
+          <div class="seal-row">
+            <button type="button" class="btn-seal" id="seal-entry">
+              <span class="btn-seal__ring">Sellar<br />asiento</span>
+            </button>
+            <p class="seal-row__note">
+              El sello guarda un folio en Atlas y una copia en este aparato.
+            </p>
+          </div>
+        </form>
+      </section>
+
+      <section class="col-saldo" aria-labelledby="saldo-title">
+        <div class="saldo-stage">
+          <div class="saldo-copy">
+            <p class="kicker">Parte II · Resultado</p>
+            <h2 id="saldo-title">Saldo</h2>
+            <p class="saldo-figure" aria-live="polite">
+              <span class="saldo-figure__currency">$</span>
+              <span id="balance-value" class="saldo-figure__value">—</span>
+            </p>
+            <p id="balance-caption" class="saldo-caption">El libro está en blanco.</p>
+          </div>
+
+          <figure class="flow-figure">
+            <div class="flow-cloud-wrap">
+              <canvas id="flow-cloud" class="flow-cloud" aria-hidden="true"></canvas>
+            </div>
+            <figcaption class="flow-caption">
+              <span class="flow-caption__index">Fig. 01</span>
+              Nube de flujo — órbita y densidad ∝ superávit
+            </figcaption>
+          </figure>
+        </div>
+
+        <article class="receipt" id="breakdown-card">
+          <header class="receipt__head">
+            <p class="receipt__stamp">Desglose</p>
+            <p class="receipt__serial" id="receipt-serial">Ticket · —</p>
+          </header>
+
+          <div id="empty-state" class="empty">
+            <svg
+              class="empty__drawing"
+              viewBox="0 0 280 160"
+              role="img"
+              aria-labelledby="empty-title empty-desc"
+            >
+              <title id="empty-title">Libro abierto sin asientos</title>
+              <desc id="empty-desc">
+                Ilustración de un cuaderno contable abierto, con líneas en
+                blanco y un sello sin tinta.
+              </desc>
+              <rect x="18" y="22" width="244" height="116" rx="3" fill="#E8E2D4" />
+              <path d="M140 22v116" stroke="#7A1F2B" stroke-width="1.2" />
+              <path
+                d="M140 22c-8 18-8 40 0 58s8 40 0 58"
+                fill="none"
+                stroke="#1C1B19"
+                stroke-opacity="0.18"
+              />
+              <g stroke="#1C1B19" stroke-opacity="0.22" stroke-width="0.8">
+                <path d="M34 48h90M34 62h90M34 76h90M34 90h78" />
+                <path d="M156 48h90M156 62h90M156 76h72M156 90h84" />
+              </g>
+              <rect
+                x="168"
+                y="98"
+                width="54"
+                height="26"
+                rx="13"
+                fill="none"
+                stroke="#7A1F2B"
+                stroke-width="1.4"
+                stroke-dasharray="3 2"
+                transform="rotate(-8 195 111)"
+              />
+              <text
+                x="195"
+                y="114"
+                text-anchor="middle"
+                fill="#7A1F2B"
+                font-family="Fraunces, serif"
+                font-size="8"
+                transform="rotate(-8 195 111)"
+              >
+                SIN TINTA
+              </text>
+              <path
+                d="M48 118c8-18 22-20 28-6"
+                fill="none"
+                stroke="#1B4332"
+                stroke-width="1.2"
+              />
+              <circle cx="48" cy="118" r="2.2" fill="#1C1B19" />
+            </svg>
+            <p class="empty__text">
+              Todavía no hay cifras. Escriba un ingreso a la izquierda;
+              el recibo se llena solo.
+            </p>
+          </div>
+
+          <div id="breakdown" class="breakdown" hidden></div>
+        </article>
+
+        <article class="statement">
+          <header class="statement__head">
+            <h3>Historial de folios</h3>
+            <button type="button" class="btn-text" id="clear-history" hidden>
+              Vaciar libro
+            </button>
+          </header>
+          <div class="statement__rule" aria-hidden="true"></div>
+          <div id="history-empty" class="statement__empty">
+            <p>Ningún asiento sellado. El sello de la izquierda deja constancia aquí.</p>
+          </div>
+          <table class="statement__table" id="history-table" hidden>
+            <thead>
+              <tr>
+                <th>Nº</th>
+                <th>Fecha</th>
+                <th>Ingresos</th>
+                <th>Egresos</th>
+                <th>Saldo</th>
+                <th><span class="visually-hidden">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </article>
+      </section>
+    </main>
+
+    <footer class="colophon">
+      <p>Mayor · libro auxiliar de caja · cifras en moneda local · Atlas + copia local</p>
+    </footer>
+
+    <script>
+      window.MAYOR_API_BASE = "http://127.0.0.1:3000";
+    </script>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
