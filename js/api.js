@@ -1,9 +1,8 @@
+import { getApiBase } from "./config.js";
+
 const STORAGE_CLIENT = "mayor:clientId";
 
-export const API_BASE =
-  window.MAYOR_API_BASE ||
-  localStorage.getItem("mayor:api") ||
-  "http://127.0.0.1:3000";
+export const API_BASE = getApiBase();
 
 export function getClientId() {
   let id = localStorage.getItem(STORAGE_CLIENT);
