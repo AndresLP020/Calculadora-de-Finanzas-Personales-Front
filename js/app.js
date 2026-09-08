@@ -198,6 +198,19 @@ function hasData() {
   return income > 0 || expenses > 0;
 }
 
+function clearDraftFields() {
+  state.income = "";
+  state.extra = "";
+  state.categories = (state.categories.length
+    ? state.categories
+    : structuredClone(DEFAULT_CATEGORIES)
+  ).map((cat) => ({ ...cat, amount: "" }));
+  els.income.value = "";
+  els.extra.value = "";
+  renderCategories();
+  bindCategoryEvents();
+}
+
 function bindField(field) {
   const input = field.querySelector("input");
   const label = field.querySelector(".field__label");
@@ -538,9 +551,10 @@ function sealEntry() {
     snapshot: structuredClone(state),
   });
   history = history.slice(0, 16);
+  clearDraftFields();
   persist(true);
   renderHistory();
-  els.serial.textContent = `Ticket · Folio ${String(folio).padStart(3, "0")}`;
+  compute(true);
   els.folio.textContent = String(folio).padStart(2, "0");
 
   els.seal.classList.add("is-stamped");
